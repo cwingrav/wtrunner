@@ -204,60 +204,6 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   }
 
 
-
-  # $1 name
-  # $2 command
-  # $3 expected retval
-  # $4 expected result
-#  function tr_test()
-#  {
-  # 1 - name
-  # 2 - test 
-  # 3 - retval
-  # 4 - num vars returned
-  # * - remaining vars
-#    tr_testarray "$1" "$2" "$3" 1 "$4"
-#  }
-
-#  function tr_test_old()
-#  {
-#    echo "TEST   : '${1}'"
-#    local Re=
-#    local R=`${2}`; Re=$?
-#    #  echo "R  ${R}"
-#    #  echo "Re ${Re}"
-#
-#    if [ "${4:0:1}" == "[" ]; then
-#      # echo "R ${R}"
-#      # echo "eval '${4}'"
-#      local result=${R}
-#      local RR=`eval $4` ; RRe=$?
-#      # echo "RR '${RR}' ${RRe}"
-#      if [ ${RRe} -eq ${3} ]; then
-#        echo "  PASSED"
-#        let "_tr_results[1]++"
-#        let "_tr_results[4]++"
-#      else
-#        echo "  FAILED '${4}' returns '${RRe}' not '${3}'"
-#        let "_tr_results[0]++"
-#        let "_tr_results[3]++"
-#        if [ ${_tr_exit_on_fail} == 1 ]; then tr_results; exit 1; fi
-#      fi
-#    else
-#
-#      if [ "${R}" != "${4}" ] || [ "${Re}" -ne ${3} ]; then
-#        echo "  FAILED '${R}' '${Re}' is not '${4}' '${3}'"
-#        let "_tr_results[0]++"
-#        let "_tr_results[3]++"
-#        if [ ${_tr_exit_on_fail} == 1 ]; then tr_results; exit 1; fi
-#      else
-#        echo "  PASSED"
-#        let "_tr_results[1]++"
-#        let "_tr_results[4]++"
-#      fi
-#    fi
-#  }
-
   # 1 - name
   # 2 - test 
   # 3 - retval
@@ -287,7 +233,27 @@ EOF
 
     # R_ is raw output and has newlines
     # R is split on newlinees does not, but R maintains # of args
-    R_="$(eval ${2})"; Re=$?
+    # R_="$(eval ${2})"; Re=$?
+
+    rm -f STDout STDerr
+    mkfifo STDout STDerr
+    $(eval ${2} >STDout 2>STDerr) &
+    RP=$!
+    #echo "RP ${RP}"
+    exec {fdout}<STDout {fderr}<STDerr
+    rm STDout STDerr
+    #RSTDout=$(cat <&$fdout)
+    R_=$(cat <&$fdout)
+    RSTDerr=$(cat <&$fderr)
+    wait $RP
+    Re=$?
+    #echo "R_     : ${R_}"
+    #echo "RSTDout: ${RSTDout}"
+    #echo "RSTDerr: ${RSTDerr}"
+    #echo "Re     : ${Re}"
+    exec {fdout}<&- {fderr}<&-
+
+
     local R=( ${R_[@]} )
 #    echo "R_: ${#R_[@]} ${#R_[*]} '${R_[@]}'"
 #    echo "R : ${#R[@]} ${#R[*]} '${R[@]}'"
@@ -373,7 +339,8 @@ EOF
       #    done
       #    printf "'\n"
       printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-      printf "  OUTPUT : '%s\n" "${R[@]}"
+      printf "  STDOUT : '%s\n" "${R[@]}"
+      printf "  STDERR : '%s\n" "${RSTDerr[@]}"
       #printf "  OUTPUT1: '%s\n" "${R[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
 #      printf "    %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
       printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
@@ -382,7 +349,8 @@ EOF
     else
       if [ ${_tr_output} -ge 2 ]; then
         printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-        printf "  OUTPUT : '%s\n" "${R_[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+        printf "  STDOUT : '%s\n" "${R_[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+        if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
       fi
       echo "  PASSED"
       let "_tr_results[1]++"

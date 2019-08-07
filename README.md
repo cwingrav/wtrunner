@@ -29,9 +29,11 @@ tr_test 'An Echo Test 2' 'echo 1 2' 0 2 '1' '2'     # tests that the output is 1
 tr_test 'Test Error'     'bash -c "exit 1"' 1 1 ""  # expects 0
 tr_test "Query Test" \ 
   'echo 1' 0 1 '[ "${result}" != "0" ]'             # result is 1 which is not equal to 0
+```
 
-# RESULTS IN:
+Results in the output:
 
+```
 TEST   : 'An Echo Test' (line 6)
   CMD    : 'echo 1'
   EXPECT : 1

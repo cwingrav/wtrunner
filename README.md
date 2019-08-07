@@ -27,6 +27,8 @@ tr_vverbose
 tr_test 'An Echo Test'   'echo 1' 0 1 '1'           # tests that the output of echo is 1, with no errors
 tr_test 'An Echo Test 2' 'echo 1 2' 0 2 '1' '2'     # tests that the output is 1 then 2, with no errors
 tr_test 'Test Error'     'bash -c "exit 1"' 1 1 ""  # expects 0
+tr_test "Query Test" \ 
+  'echo 1' 0 1 '[ "${result}" != "0" ]'             # result is 1 which is not equal to 0
 
 # RESULTS IN:
 
@@ -47,6 +49,12 @@ TEST   : 'Test Error' (line 8)
   CMD    : 'bash -c "exit 1"'
   EXPECT :
   OUTPUT : '
+  PASSED
+  
+TEST   : 'Query Test' (line 9)
+  CMD    : 'echo 1'
+  EXPECT : [ "${result}" != "0" ]
+  OUTPUT : '1
   PASSED
 ```
 
@@ -82,7 +90,7 @@ Skips this test. Useful for turning off *tr_test* without deleting it. Shows up 
 
 #### tr_test
 
-Then make your tests: tr_test TITLE COMMAND EXITVAL N EXPECTED1 EXPECTED2 ... EXPECTEDN
+Then make your tests: `tr_test TITLE COMMAND EXITVAL N EXPECTED1 EXPECTED2 ... EXPECTEDN`
 
 - **TITLE** - a nice readable title for your test
 
@@ -92,7 +100,7 @@ Then make your tests: tr_test TITLE COMMAND EXITVAL N EXPECTED1 EXPECTED2 ... EX
 
 - **N** - the number of outputs
 
-- **EXPECTEDX - output number X to compare against the COMMANDs' output
+- **EXPECTEDX** - output number X to compare against the COMMANDs' output
   - These can also be tests themselves like: `[ ${result} -eq 1]`
 ```
 ```

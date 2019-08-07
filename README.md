@@ -84,9 +84,16 @@ Skips this test. Useful for turning off *tr_test* without deleting it. Shows up 
 
 Then make your tests: tr_test TITLE COMMAND EXITVAL N EXPECTED1 EXPECTED2 ... EXPECTEDN
 
-**TITLE** - a nice readable title for your test
-**COMMAND** - a quoted command to run
-**EXITVAL** - the expected exit value of the COMMAND from above
-**N** - the number of outputs
-**EXPECTEDX - output number X to compare against the COMMANDs' output
+- **TITLE** - a nice readable title for your test
+
+- **COMMAND** - a quoted command to run
+
+- **EXITVAL** - the expected exit value of the COMMAND from above
+
+- **N** - the number of outputs
+
+- **EXPECTEDX - output number X to compare against the COMMANDs' output
+  - These can also be tests themselves like: `[ ${result} -eq 1]`
+```
+```
 

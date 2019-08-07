@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+. /usr/local/bin/wtrunner                           # load wtrunner
+
+
+tr_h1 Wov Test Runner
+
+tr_runfile 1.sh
+tr_runfile subdir/1a.sh

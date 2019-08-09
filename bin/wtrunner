@@ -35,6 +35,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   _tr_sections=
     # --- hierachy of testing sections
 
+  _tr_tc=0
 
 
 
@@ -99,13 +100,16 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   # ---------------------------------------------------------------------
 
   # $1 - if set, this is a closing section
+  # $1 - separating character
   function _tr_printsection()
   {
+    local SEP='>'
+    if [ "$1" != "" ]; then SEP=$1; fi
     if [ ${#_tr_sections[@]} -ne 0 ]; then
       for s in "${_tr_sections[@]}"; do
-        printf " > $s"
+        printf " ${SEP} $s"
       done
-      if [ "$1" != "" ]; then printf " / $1"; fi
+#      if [ "$1" != "" ]; then printf " / $1"; fi
       printf "\n"
     fi
   }
@@ -113,17 +117,26 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   {
     local a=${1:0:1}
     local s=
-    printf "\nSECTION:"
     if [ "$a" == '/' ]; then
       s="${1:1}"
+      printf "\nSECTION: "
+      # printf "\n%*sSECTION: " "${#_tr_sections[@]}" ''
       tailsection=${_tr_sections[-1]}
+      _tr_printsection '<'
+      #printf -- "---------------------------------------------------------------------\n" 
+      printf -- "-%.0s" `seq 1 ${_tr_fold}`
+      printf "\n"
       if [ "${s}" != "${tailsection}" ]; then
         echo "WARNING (tr_section in $0:$BASH_LINENO): unmatched section '${s}' vs '${tailsection}'"
       fi
       unset '_tr_sections[${#_tr_sections[@]}-1]'
       if [ ${_tr_output} -ge 2 ]; then _tr_printsection $tailsection ; fi
     else
-      s="${1}"
+      printf "\n"
+      printf -- "-%.0s" `seq 1 ${_tr_fold}`
+      # printf "\n%*s\n" ${_tr_fold} '+'
+      printf "\nSECTION:"
+      # printf "%*sSECTION:" "${#_tr_sections[@]}" ''
       _tr_sections+=( "$1" )
       _tr_printsection
     fi
@@ -131,7 +144,6 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   }
   function tr_comment()
   {
-    echo ""
     echo "COMMENT: '$1" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
   }
 
@@ -209,12 +221,20 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   # 3 - retval
   # 4 - num vars returned
   # * - remaining vars
+  function tr_test_()
+  {
+    # this does not work
+    _tr_tc=$((_tr_tc+1))
+    tr_test "$@" &
+    _tr_tctests+=( $! )
+  }
+
   function tr_test()
   {
     if [ ${_tr_testson} == 0 ]; then tr_test_skip $1 ; return 0; fi
 
     echo ""
-    echo "TEST   : '${1}' (line ${BASH_LINENO})"
+    >&2 echo "TEST   : '${1}' (line ${BASH_LINENO})"
     if [ ${_tr_output} -ge 2 ] && [ "${_tr_doctest}" != "" ]; then printf "  DOC    : '$_tr_doctest'\n"; fi
     _tr_doctest=
 
@@ -235,13 +255,13 @@ EOF
     # R is split on newlinees does not, but R maintains # of args
     # R_="$(eval ${2})"; Re=$?
 
-    rm -f STDout STDerr
-    mkfifo STDout STDerr
-    $(eval ${2} >STDout 2>STDerr) &
+    rm -f STDout.${_tr_tc} STDerr.${_tr_tc}
+    mkfifo STDout.${_tr_tc} STDerr.${_tr_tc}
+    $(eval ${2} >STDout.${_tr_tc} 2>STDerr.${_tr_tc}) &
     RP=$!
     #echo "RP ${RP}"
-    exec {fdout}<STDout {fderr}<STDerr
-    rm STDout STDerr
+    exec {fdout}<STDout.${_tr_tc} {fderr}<STDerr.${_tr_tc}
+    rm STDout.${_tr_tc} STDerr.${_tr_tc}
     #RSTDout=$(cat <&$fdout)
     R_=$(cat <&$fdout)
     RSTDerr=$(cat <&$fderr)
@@ -272,66 +292,71 @@ EOF
       #    let "_tr_results[3]++" # not counting return values
       retval=1
     fi
-    if [ "${#R[@]}" != "${4}" ]; then
-      E+=( "F CHECK: returned '${#R[@]}' values but expecting '${4}'. '${R_[@]}'" )
-      retval=1
-    fi
 
-    # test each
-    # local l="${#R[@]}"
-    local l=${4}
-    l="$((${l}-1))"
-#    echo "l $l"
-    if [ $l -lt 0 ]; then
-      >&2 echo "ERROR: test case has bad number of passed in args '$4'. Needs at least 1."
-      exit 1
-    fi
-    for i in $(seq 0 ${l}); do
-      let ii="i+5"
-      # echo "- $i $ii : ${R[$i]} ${!ii}"
-
-      # if it is a comparison (in brackets), then run it
-      if [ "${!ii:0:1}" == "[" ]; then
-#        echo " ... custom test rule '${!ii}'"
-        local result=${R[$i]}
-        local RR=`eval ${!ii}` ; RRe=$?
-        EXPECTED+=( "${!ii}" )
-#        echo "RR '${RR}' '${RRe}' : '${3}' '${4}'"
-        if [ ${RRe} -eq ${3} ]; then
-          let "_tr_results[4]++"
-        else
-          E+=( "F CHECK'${!ii}' returns '${RRe}' not '${3}'" )
-          let "_tr_results[3]++"
-        fi
-      else
-        EXPECTED+=( "${!ii}" )
-#        echo "R ${R[@]} $i"
-        if [ "${R[$i]}" != "${!ii}" ]; then
-          E+=( "F CHECK: '${R[$i]}' is not '${!ii}'" )
-          let "_tr_results[3]++"
-          retval=1
-        else
-          let "_tr_results[4]++"
-          #      echo "  PASSED"
-        fi
+    if [ "${4}" == "-1" ]; then
+      retval=0
+    else
+      if [ "${#R[@]}" != "${4}" ]; then
+        E+=( "F CHECK: returned '${#R[@]}' values but expecting '${4}'. '${R_[@]}'" )
+        retval=1
       fi
-    done
+
+      # test each
+      # local l="${#R[@]}"
+      local l=${4}
+      l="$((${l}-1))"
+      #    echo "l $l"
+      if [ $l -lt 0 ]; then
+        >&2 echo "ERROR: test case has bad number of passed in args '$4'. Needs at least 1."
+        exit 1
+      fi
+      for i in $(seq 0 ${l}); do
+        let ii="i+5"
+        # echo "- $i $ii : ${R[$i]} ${!ii}"
+
+        # if it is a comparison (in brackets), then run it
+        if [ "${!ii:0:1}" == "[" ]; then
+          #        echo " ... custom test rule '${!ii}'"
+          local result=${R[$i]}
+          local RR=`eval ${!ii}` ; RRe=$?
+          EXPECTED+=( "${!ii}" )
+          #        echo "RR '${RR}' '${RRe}' : '${3}' '${4}'"
+          if [ ${RRe} -eq ${3} ]; then
+            let "_tr_results[4]++"
+          else
+            E+=( "F CHECK'${!ii}' returns '${RRe}' not '${3}'" )
+            let "_tr_results[3]++"
+          fi
+        else
+          EXPECTED+=( "${!ii}" )
+          #        echo "R ${R[@]} $i"
+          if [ "${R[$i]}" != "${!ii}" ]; then
+            E+=( "F CHECK: '${R[$i]}' is not '${!ii}'" )
+            let "_tr_results[3]++"
+            retval=1
+          else
+            let "_tr_results[4]++"
+            #      echo "  PASSED"
+          fi
+        fi
+      done
+    fi
 
 
-    #  for r in "${R[@]}"
-    #  do
-    #    echo 
-    #    if [ "${R}" != "${3}" ] || [ "${Re}" -ne ${4} ]; then
-    #      echo "FAILED : '${TEST}' : ${1} : '${R}' '${Re}'"
-    #      let "_tr_results[0]++"
-    #    fi
-    #  done
+  #  for r in "${R[@]}"
+  #  do
+  #    echo 
+  #    if [ "${R}" != "${3}" ] || [ "${Re}" -ne ${4} ]; then
+  #      echo "FAILED : '${TEST}' : ${1} : '${R}' '${Re}'"
+  #      let "_tr_results[0]++"
+  #    fi
+  #  done
 
 
 
-    if [ $retval -eq 1 ]; then
-      #    RR="${R[@]}"
-      #    printf "  FAILED '${Re}' '${RR}' is not '${3}' '"
+  if [ $retval -eq 1 ]; then
+    #    RR="${R[@]}"
+    #    printf "  FAILED '${Re}' '${RR}' is not '${3}' '"
       #    let "_tr_results[0]++"
       #    for i in $(seq 1 ${#R[@]}); do
       #      let ii="i+4"
@@ -344,7 +369,7 @@ EOF
       #printf "  OUTPUT1: '%s\n" "${R[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
 #      printf "    %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
       printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
-      echo "  FAILED"
+      printf "  \U00D7 FAILED\n"
       let "_tr_results[0]++"
     else
       if [ ${_tr_output} -ge 2 ]; then
@@ -352,7 +377,7 @@ EOF
         printf "  STDOUT : '%s\n" "${R_[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
         if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
       fi
-      echo "  PASSED"
+      printf "  \U2713 PASSED\n"
       let "_tr_results[1]++"
     fi
 
@@ -362,8 +387,7 @@ EOF
 
   function tr_test_skip()
   {
-    echo ""
-    echo "SKIP T : '${1}'"
+    printf "\nSKIP T : \U26A0 '${1}'\n"
     let "_tr_results[2]++"
   }
 
@@ -379,10 +403,10 @@ EOF
     echo ""
     echo "RESULTS"
     echo "---------------------------------------------------------------------"
-    echo "  Failed  : ${_tr_results[0]}  (${_tr_results[3]} checks)"
-    echo "  Passed  : ${_tr_results[1]}  (${_tr_results[4]} checks)"
-    echo "  Skipped : ${_tr_results[2]}"
-    echo "  Totals  : ${totaltests}  ($totalchecks checks)"
+    printf "  \U00D7 Failed  : ${_tr_results[0]}  (${_tr_results[3]} checks)\n"
+    printf "  \U2713 Passed  : ${_tr_results[1]}  (${_tr_results[4]} checks)\n"
+    printf "  \U26A0 Skipped : ${_tr_results[2]}\n"
+    printf "  Totals    : ${totaltests}  ($totalchecks checks)\n"
   }
 
 

@@ -271,12 +271,6 @@ EOF
     local E=()
     local EXPECTED=()
     local Re=
-    local R_=
-    local R=
-
-    # R_ is raw output and has newlines
-    # R is split on newlinees does not, but R maintains # of args
-    # R_="$(eval ${2})"; Re=$?
 
     # --------------------------------------------------------------------- 
     # EVALUATE THE COMMAND
@@ -289,39 +283,23 @@ EOF
     exec {fdout}<STDout.${_tr_tc} {fderr}<STDerr.${_tr_tc}
     #RSTDout=$(cat <&$fdout)
     rm STDout.${_tr_tc} STDerr.${_tr_tc}
-    R_=()
 #    R_=($(cat <&$fdout))
     mapfile -t <&$fdout
     RM=("${MAPFILE[@]}")
-    R_="${MAPFILE[@]}"
-    R=("${MAPFILE[@]}")
     RSTDerr=$(cat <&$fderr)
-#    echo "4 "
     wait $RP
-#    echo "5 "
     Re=$?
-    #echo "R_     : ${R_}"
     #echo "RSTDout: ${RSTDout}"
     #echo "RSTDerr: ${RSTDerr}"
     #echo "Re     : ${Re}"
     exec {fdout}<&- {fderr}<&-
 
-    local R=( ${R_[@]} )
-    local RR=( "${R_[@]}" )
-    echo "M : ${#MAPFILE[@]} '${MAPFILE[@]}'"
-    echo "RM: ${#RM[@]} '${RM[@]}'"
-    echo "R_: ${#R_[@]} '${R_[@]}' ${#R_[*]} '${R_[*]}'"
-    echo "R : ${#R[@]} '${R[@]}' ${#R[*]} '${R[*]}'"
-    echo "RR: ${#RR[@]} '${RR[@]}' ${#RR[*]} '${RR[*]}'"
-#    echo "R_: ${#R_[@]} ${#R_[*]} '${R_[@]}'"
-#    echo "R : ${#R[@]} ${#R[*]} '${R[@]}'"
+    #echo "RM: ${#RM[@]} '${RM[@]}'"
 
     # make sure it at least has some output of ''
-    if [ ${#R[@]} -eq 0 ]; then R=( '' ); fi
+    if [ ${#RM[@]} -eq 0 ]; then RM=( '' ); fi
 
     local retval=0
-#    echo "R  '${R[@]}' '${#R[@]}' "
-#    echo "Re ${Re}:${3}:${#@}"
 
     if [ ${#@} -lt 3 ]; then
       >&2 echo "ERROR: tr_test is missing expected return value (returned '${Re}'). Additional parameter needed for test: '${1} (line ${BASH_LINENO})'."
@@ -338,19 +316,17 @@ EOF
 
     if [ ${#@} -lt 4 ]; then
       >&2 echo "ERROR: tr_test is missing expected number of returns (returned '${#@}'). Additional parameter needed for test: '${1} (line ${BASH_LINENO})'."
-      >&2 echo "  : ${R_[@]}"
+      >&2 echo "  : ${RM[@]}"
       exit 1
     fi
 
     if [ "${4}" != "-1" ]; then
-      echo "R_ ${#R_[@]}  ${#R[@]}  ${#R_[*]}  ${#R[*]}"
-      if [ "${#R[@]}" != "${4}" ]; then
-        E+=( "F1CHECK: returned '${#R[@]}' values but expecting ${4}. '${R_[@]}'" )
+      if [ "${#RM[@]}" != "${4}" ]; then
+        E+=( "F1CHECK: returned '${#RM[@]}' values but expecting ${4}. '${RM[@]}'" )
         retval=1
       fi
 
       # test each
-      # local l="${#R[@]}"
       local l=${4}
       l="$((${l}-1))"
       #    echo "l $l"
@@ -360,12 +336,11 @@ EOF
       fi
       for i in $(seq 0 ${l}); do
         let ii="i+5"
-        # echo "- $i $ii : ${R[$i]} ${!ii}"
 
         # if it is a comparison (in brackets), then run it
         if [ "${!ii:0:1}" == "[" ]; then
           #        echo " ... custom test rule '${!ii}'"
-          local result=${R[$i]}
+          local result=${RM[$i]}
           local RR=`eval ${!ii}` ; RRe=$?
           EXPECTED+=( "${!ii}" )
           #        echo "RR '${RR}' '${RRe}' : '${3}' '${4}'"
@@ -377,11 +352,8 @@ EOF
           fi
         else
           EXPECTED+=( "${!ii}" )
-          echo "R_i  .${R_[$i]}. $i"
-          echo "R i  .${R[$i]}. $i"
-          echo "ii .${!ii}."
-          if [ "${R_[$i]}" != "${!ii}" ]; then
-            E+=( "F CHECK: '${R_[$i]}' is not '${!ii}'" )
+          if [ "${RM[$i]}" != "${!ii}" ]; then
+            E+=( "F CHECK: '${RM[$i]}' is not '${!ii}'" )
             let "_tr_results[3]++"
             retval=1
           else
@@ -393,30 +365,11 @@ EOF
     fi
 
 
-  #  for r in "${R[@]}"
-  #  do
-  #    echo 
-  #    if [ "${R}" != "${3}" ] || [ "${Re}" -ne ${4} ]; then
-  #      echo "FAILED : '${TEST}' : ${1} : '${R}' '${Re}'"
-  #      let "_tr_results[0]++"
-  #    fi
-  #  done
-
-
-
   if [ $retval -eq 1 ]; then
-    #    RR="${R[@]}"
-    #    printf "  FAILED '${Re}' '${RR}' is not '${3}' '"
-      #    let "_tr_results[0]++"
-      #    for i in $(seq 1 ${#R[@]}); do
-      #      let ii="i+4"
-      #      printf "${!ii}"
-      #    done
-      #    printf "'\n"
       printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-      printf "  STDOUT : '%s\n" "${R_}" | gsed -e '2,$s/^/           \x27/'
-      printf "  STDERR : '%s\n" "${RSTDerr[@]}"
-      #printf "  OUTPUT1: '%s\n" "${R[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+      printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
+      printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
+      #printf "  OUTPUT1: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
 #      printf "    %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
       printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
       printf "  \U00D7 FAILED\n"
@@ -424,7 +377,8 @@ EOF
     else
       if [ ${_tr_output} -ge 2 ]; then
         printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-        printf "  STDOUT : '%s\n" "${R_[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+        printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
+        #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
         if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
       fi
       printf "  \U2713 PASSED\n"
@@ -453,10 +407,10 @@ EOF
     echo ""
     echo "RESULTS"
     echo "---------------------------------------------------------------------"
-    printf "  \U00D7 Failed  : ${_tr_results[0]}  (${_tr_results[3]} checks)\n"
-    printf "  \U2713 Passed  : ${_tr_results[1]}  (${_tr_results[4]} checks)\n"
-    printf "  \U26A0 Skipped : ${_tr_results[2]}\n"
-    printf "  Totals    : ${totaltests}  ($totalchecks checks)\n"
+    printf "  \U00D7 ${_tr_results[0]} Failed   (${_tr_results[3]} checks)\n"
+    printf "  \U2713 ${_tr_results[1]} Passed   (${_tr_results[4]} checks)\n"
+    printf "  \U26A0 ${_tr_results[2]} Skipped\n"
+    printf "    ${totaltests} Total    ($totalchecks checks)\n"
   }
 
 

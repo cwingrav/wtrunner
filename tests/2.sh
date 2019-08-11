@@ -7,14 +7,14 @@ tr_vverbose
 tr_h2 'Testing testrunnger'
 
 {
-  tr_section 'Arrays'
+  tr_section 'multiline'
 
-  tr_test 'Compare array' \
-    'echo 1 2 3' 0 3 "1" "2" "3"
-  tr_test 'Compare array and expect to fail' \
-    'echo 1 2 3' 1 2 "1" "2" "3"
+  tr_test 'Compare multiline' \
+    'echo 1 2 3' 0 1 "1 2 3"
+  tr_test 'Compare multiline' \
+    'echo 1 ; echo 2; echo 3' 0 3 "1" "2" "3"
 
-  tr_section '/Arrays'
+  tr_section '/multiline'
 }
 
 {
@@ -22,8 +22,8 @@ tr_h2 'Testing testrunnger'
   tr_section 'Directories'
   tr_test_skip 'a placeholder'
   tr_test "curdir is ${CURDIR}" 'pwd' 0 1 "${CURDIR}"
-  tr_dir test1
-  tr_test "curdir is ${CURDIR}/test1" 'pwd' 0 1 "${CURDIR}/test1"
+  tr_dir subdir
+  tr_test "curdir is ${CURDIR}/subdir" 'pwd' 0 1 "${CURDIR}/subdir"
   tr_popdir
   tr_test "curdir is ${CURDIR}" 'pwd' 0 1 "${CURDIR}"
   tr_results

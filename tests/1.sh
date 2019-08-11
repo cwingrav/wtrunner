@@ -10,3 +10,6 @@ tr_test 'An Echo Test 2' 'echo 1 ; echo 2'  0 2 '1' '2' # tests that the output 
 tr_test 'Test Error'     'bash -c "exit 1"' 1 1 ""      # expects 0
 tr_test "Query Test" \
   'echo 1' 0 1 '[ "${result}" != "0" ]'             # result is 1 which is not equal to 0
+
+
+tr_results

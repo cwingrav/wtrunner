@@ -37,6 +37,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
 
   _tr_tc=0
 
+  _tr_runfile=
 
 
   # Initialization
@@ -54,6 +55,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_dirs=()
     _tr_doctest=
     _tr_sections=()
+    _tr_runfile="$0"
   }
 
   # Configuration
@@ -198,18 +200,26 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     #echo "RUN FILE '${1}' : '${p}' ${pp}"
     echo ""
     echo "RUN FILE '${pp}' ('${p}')"
+    _tr_runfileold="$_tr_runfile"
+    _tr_runfile="${p}"
     . "${p}"
+    _tr_runfile="$_tr_runfileold"
     # TODO: should check dirs stack as it could get screwed up here
   }
   function tr_dir()
   {
-    _tr_dirs+=( `pwd` )
+    # local p=$(realpath $1)
+    local p=$(pwd)
+    _tr_dirs+=( "$p" )
+    # printf "_tr_dirs: ${_tr_dirs[@]}"
     cd $1
-    printf "\nDIR    : 'cd ${1}' to `pwd`\n"
+    printf "\nDIR    : 'cd ${1}'\n"
   }
   function tr_popdir()
   {
     d="${_tr_dirs[-1]}"
+    #printf "_tr_dirs: ${_tr_dirs[@]}"
+    # printf "\nPOPDIR1: 'to $d'\n"
     unset '_tr_dirs[${#_tr_dirs[@]}-1]'
     cd $d
     printf "\nPOPDIR : 'to `pwd`'\n"
@@ -229,19 +239,32 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_tctests+=( $! )
   }
 
+  function tr_run()
+  {
+    if [ ${_tr_testson} == 0 ]; then tr_run_skip $1 ; return 0; fi
+    >&2 printf "\nRUN    : '${1}' (${_tr_runfile}:line ${BASH_LINENO})\n"
+    printf   "  CMD    : '${2}'\n"
+    # TODO: capture stderr/out
+    eval "${2} 2> /dev/null" | gsed 's/^/  \x27/'
+  }
+  function tr_run_skip()
+  {
+    printf "\nSKIP R : \U26A0 '${1}'\n"
+  }
+
   function tr_test()
   {
     if [ ${_tr_testson} == 0 ]; then tr_test_skip $1 ; return 0; fi
 
     echo ""
-    >&2 echo "TEST   : '${1}' (line ${BASH_LINENO})"
+    >&2 echo "TEST   : '${1}' (${_tr_runfile}:line ${BASH_LINENO})"
     if [ ${_tr_output} -ge 2 ] && [ "${_tr_doctest}" != "" ]; then printf "  DOC    : '$_tr_doctest'\n"; fi
     _tr_doctest=
 
     # echo "--EVAL $2"
     if [ ${_tr_output} -ge 2 ]; then
 #        printf "  CMD    : '$2'\n"
-        cat <<EOF | fold -w ${_tr_fold2} -s | sed 's/^/  /'
+        cat <<EOF | fold -w ${_tr_fold2} -s | gsed 's/^/  /'
 CMD    : '$2'
 EOF
     fi
@@ -255,17 +278,27 @@ EOF
     # R is split on newlinees does not, but R maintains # of args
     # R_="$(eval ${2})"; Re=$?
 
+    # --------------------------------------------------------------------- 
+    # EVALUATE THE COMMAND
+    # --------------------------------------------------------------------- 
     rm -f STDout.${_tr_tc} STDerr.${_tr_tc}
     mkfifo STDout.${_tr_tc} STDerr.${_tr_tc}
-    $(eval ${2} >STDout.${_tr_tc} 2>STDerr.${_tr_tc}) &
+    $(COLUMNS=${_tr_fold4} eval ${2} >STDout.${_tr_tc} 2>STDerr.${_tr_tc}) &
     RP=$!
     #echo "RP ${RP}"
     exec {fdout}<STDout.${_tr_tc} {fderr}<STDerr.${_tr_tc}
-    rm STDout.${_tr_tc} STDerr.${_tr_tc}
     #RSTDout=$(cat <&$fdout)
-    R_=$(cat <&$fdout)
+    rm STDout.${_tr_tc} STDerr.${_tr_tc}
+    R_=()
+#    R_=($(cat <&$fdout))
+    mapfile -t <&$fdout
+    RM=("${MAPFILE[@]}")
+    R_="${MAPFILE[@]}"
+    R=("${MAPFILE[@]}")
     RSTDerr=$(cat <&$fderr)
+#    echo "4 "
     wait $RP
+#    echo "5 "
     Re=$?
     #echo "R_     : ${R_}"
     #echo "RSTDout: ${RSTDout}"
@@ -273,8 +306,13 @@ EOF
     #echo "Re     : ${Re}"
     exec {fdout}<&- {fderr}<&-
 
-
     local R=( ${R_[@]} )
+    local RR=( "${R_[@]}" )
+    echo "M : ${#MAPFILE[@]} '${MAPFILE[@]}'"
+    echo "RM: ${#RM[@]} '${RM[@]}'"
+    echo "R_: ${#R_[@]} '${R_[@]}' ${#R_[*]} '${R_[*]}'"
+    echo "R : ${#R[@]} '${R[@]}' ${#R[*]} '${R[*]}'"
+    echo "RR: ${#RR[@]} '${RR[@]}' ${#RR[*]} '${RR[*]}'"
 #    echo "R_: ${#R_[@]} ${#R_[*]} '${R_[@]}'"
 #    echo "R : ${#R[@]} ${#R[*]} '${R[@]}'"
 
@@ -283,21 +321,31 @@ EOF
 
     local retval=0
 #    echo "R  '${R[@]}' '${#R[@]}' "
-#    echo "Re ${Re}"
+#    echo "Re ${Re}:${3}:${#@}"
+
+    if [ ${#@} -lt 3 ]; then
+      >&2 echo "ERROR: tr_test is missing expected return value (returned '${Re}'). Additional parameter needed for test: '${1} (line ${BASH_LINENO})'."
+      exit 1
+    fi
 
     # test retval
-    if [ "${Re}" != "${3}" ]; then
+    if [ ${Re} != ${3} ]; then
       E+=( "F CHECK: return value '${Re}' is not '${3}'" )
       #echo "    F CHECK: return value '${Re}' is not '${3}'"
       #    let "_tr_results[3]++" # not counting return values
       retval=1
     fi
 
-    if [ "${4}" == "-1" ]; then
-      retval=0
-    else
+    if [ ${#@} -lt 4 ]; then
+      >&2 echo "ERROR: tr_test is missing expected number of returns (returned '${#@}'). Additional parameter needed for test: '${1} (line ${BASH_LINENO})'."
+      >&2 echo "  : ${R_[@]}"
+      exit 1
+    fi
+
+    if [ "${4}" != "-1" ]; then
+      echo "R_ ${#R_[@]}  ${#R[@]}  ${#R_[*]}  ${#R[*]}"
       if [ "${#R[@]}" != "${4}" ]; then
-        E+=( "F CHECK: returned '${#R[@]}' values but expecting '${4}'. '${R_[@]}'" )
+        E+=( "F1CHECK: returned '${#R[@]}' values but expecting ${4}. '${R_[@]}'" )
         retval=1
       fi
 
@@ -329,9 +377,11 @@ EOF
           fi
         else
           EXPECTED+=( "${!ii}" )
-          #        echo "R ${R[@]} $i"
-          if [ "${R[$i]}" != "${!ii}" ]; then
-            E+=( "F CHECK: '${R[$i]}' is not '${!ii}'" )
+          echo "R_i  .${R_[$i]}. $i"
+          echo "R i  .${R[$i]}. $i"
+          echo "ii .${!ii}."
+          if [ "${R_[$i]}" != "${!ii}" ]; then
+            E+=( "F CHECK: '${R_[$i]}' is not '${!ii}'" )
             let "_tr_results[3]++"
             retval=1
           else
@@ -364,7 +414,7 @@ EOF
       #    done
       #    printf "'\n"
       printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-      printf "  STDOUT : '%s\n" "${R[@]}"
+      printf "  STDOUT : '%s\n" "${R_}" | gsed -e '2,$s/^/           \x27/'
       printf "  STDERR : '%s\n" "${RSTDerr[@]}"
       #printf "  OUTPUT1: '%s\n" "${R[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
 #      printf "    %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'

@@ -7,3 +7,4 @@ tr_h1 Wov Test Runner
 
 tr_runfile 1.sh
 tr_runfile subdir/1a.sh
+tr_runfile 2.sh

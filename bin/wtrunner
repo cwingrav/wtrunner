@@ -44,7 +44,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   # ---------------------------------------------------------------------
   function tr_reset_results()
   {
-    _tr_results=( 0 0 0 0 0 )    # failed passed skipped subtestfailed total
+    _tr_results=( 0 0 0 0 0 0 )    # failed passed skipped subtestfailed subtestpassed todo
   }
   function tr_init()
   {
@@ -206,6 +206,14 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_runfile="$_tr_runfileold"
     # TODO: should check dirs stack as it could get screwed up here
   }
+  function tr_runfile_skip()
+  {
+    local p=$(realpath "`dirname $0`/${1}")
+    local spl=${#_tr_startpath}+1
+    local pp="${p:spl}"
+    echo ""
+    echo "RUN FILE SKIPPED '${pp}' ('${p}')"
+  }
   function tr_dir()
   {
     # local p=$(realpath $1)
@@ -322,7 +330,7 @@ EOF
 
     if [ "${4}" != "-1" ]; then
       if [ "${#RM[@]}" != "${4}" ]; then
-        E+=( "F1CHECK: returned '${#RM[@]}' values but expecting ${4}. '${RM[@]}'" )
+        E+=( "F CHECK: returned '${#RM[@]}' values but expecting ${4}. '${RM[@]}'" )
         retval=1
       fi
 
@@ -391,8 +399,13 @@ EOF
 
   function tr_test_skip()
   {
-    printf "\nSKIP T : \U26A0 '${1}'\n"
+    printf "\nSKIP T : \U26A0 '${1}' (${_tr_runfile}:line ${BASH_LINENO})\n"
     let "_tr_results[2]++"
+  }
+  function tr_test_todo()
+  {
+    printf "\nTODO T : \U26A0 '${1}' (${_tr_runfile}:line ${BASH_LINENO})\n"
+    let "_tr_results[5]++"
   }
 
   function tr_doctest
@@ -410,6 +423,7 @@ EOF
     printf "  \U00D7 ${_tr_results[0]} Failed   (${_tr_results[3]} checks)\n"
     printf "  \U2713 ${_tr_results[1]} Passed   (${_tr_results[4]} checks)\n"
     printf "  \U26A0 ${_tr_results[2]} Skipped\n"
+    printf "  \U26A0 ${_tr_results[5]} Todo\n"
     printf "    ${totaltests} Total    ($totalchecks checks)\n"
   }
 

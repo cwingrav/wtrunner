@@ -121,12 +121,16 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     local s=
     if [ "$a" == '/' ]; then
       s="${1:1}"
+      printf "\n"
+      printf -- "<%.0s" `seq 1 ${_tr_fold}`
       printf "\nSECTION: "
       # printf "\n%*sSECTION: " "${#_tr_sections[@]}" ''
       tailsection=${_tr_sections[-1]}
-      _tr_printsection '<'
+      _tr_printsection '/'
       #printf -- "---------------------------------------------------------------------\n" 
-      printf -- "-%.0s" `seq 1 ${_tr_fold}`
+      printf -- "<%.0s" `seq 1 ${_tr_fold}`
+      printf "\n"
+      printf -- "<%.0s" `seq 1 ${_tr_fold}`
       printf "\n"
       if [ "${s}" != "${tailsection}" ]; then
         echo "WARNING (tr_section in $0:$BASH_LINENO): unmatched section '${s}' vs '${tailsection}'"
@@ -134,13 +138,17 @@ if [ "${_tr_is_loaded}" != "1" ]; then
       unset '_tr_sections[${#_tr_sections[@]}-1]'
       if [ ${_tr_output} -ge 2 ]; then _tr_printsection $tailsection ; fi
     else
-      printf "\n"
-      printf -- "-%.0s" `seq 1 ${_tr_fold}`
+      printf "\n" ;
+      printf -- ">%.0s" `seq 1 ${_tr_fold}`
+      printf "\n" ;
+      printf -- ">%.0s" `seq 1 ${_tr_fold}`
       # printf "\n%*s\n" ${_tr_fold} '+'
       printf "\nSECTION:"
       # printf "%*sSECTION:" "${#_tr_sections[@]}" ''
       _tr_sections+=( "$1" )
       _tr_printsection
+      printf -- ">%.0s" `seq 1 ${_tr_fold}`
+      printf "\n"
     fi
 
   }
@@ -264,7 +272,9 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   {
     if [ ${_tr_testson} == 0 ]; then tr_test_skip $1 ; return 0; fi
 
-    echo ""
+    printf "\n"
+    printf -- "-%.0s" `seq 1 ${_tr_fold}`
+    printf "\n"
     >&2 echo "TEST   : '${1}' (${_tr_runfile}:line ${BASH_LINENO})"
     if [ ${_tr_output} -ge 2 ] && [ "${_tr_doctest}" != "" ]; then printf "  DOC    : '$_tr_doctest'\n"; fi
     _tr_doctest=
@@ -419,7 +429,8 @@ EOF
     let totalchecks="_tr_results[3]+_tr_results[4]"
     echo ""
     echo "RESULTS"
-    echo "---------------------------------------------------------------------"
+    printf -- "-%.0s" `seq 1 ${_tr_fold}`
+    printf "\n" ;
     printf "  \U00D7 ${_tr_results[0]} Failed   (${_tr_results[3]} checks)\n"
     printf "  \U2713 ${_tr_results[1]} Passed   (${_tr_results[4]} checks)\n"
     printf "  \U26A0 ${_tr_results[2]} Skipped\n"

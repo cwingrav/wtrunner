@@ -18,46 +18,117 @@
 
 ## Example
 
-A test script:
+A test script (tests/1.sh):
 ```
 #!/usr/bin/env bash
-
 . /usr/local/bin/wtrunner                           # load wtrunner
+
+tr_h1 'Test 1 Example'
+tr_comment 'A simple test of echo commands. Above is a tr_h1 command and this is a tr_comment.'
+
+tr_onfailcontinue
 tr_vverbose
-tr_test 'An Echo Test'   'echo 1' 0 1 '1'           # tests that the output of echo is 1, with no errors
-tr_test 'An Echo Test 2' 'echo 1 2' 0 2 '1' '2'     # tests that the output is 1 then 2, with no errors
-tr_test 'Test Error'     'bash -c "exit 1"' 1 1 ""  # expects 0
-tr_test "Query Test" \ 
+tr_test 'An Echo Test'   'echo 1'           0 1 '1'     # tests that the output of echo is 1, with no errors
+tr_verbose
+tr_test 'An Echo Test 2' 'echo 1 2'         0 1 '1 2'   # tests that the output is 1 then 2, with no errors
+tr_test_skip 'Skip this Test2' 'echo 1 2'   0 1 '1 2'   # skips with easy to add text
+tr_test 'An Echo Test 2' 'echo 1 ; echo 2'  0 2 '1' '2' # tests that the output is 1 then 2, with no errors
+tr_test 'Test Error'     'bash -c "exit 1"' 1 1 ""      # expects 0
+tr_test "Query Test" \
   'echo 1' 0 1 '[ "${result}" != "0" ]'             # result is 1 which is not equal to 0
+mkdir -p t
+tr_comment 'Change directory, make a file and pop out'
+tr_dir t
+echo "1" > 1.txt
+tr_protectfile "1.txt" diff:postcat
+tr_popdir
+tr_test "contents of file is 1" "cat t/1.txt" 0 1 "1"
+tr_run  "set file to 2" "echo '2' > t/1.txt"
+tr_test "contents of file is 2" "cat t/1.txt" 0 1 "2"
+tr_comment 'Replaces the protected file manually (normally runs on exit) and does a cat and diff (set with tr_protectfile command)'
+_tr_onfinish
+tr_test "contents of file back to 1" "cat t/1.txt" 0 1 "1"
+tr_results
 ```
 
 Results in the output:
 
 ```
-TEST   : 'An Echo Test' (line 6)
-  CMD    : 'echo 1'
-  EXPECT : 1
-  OUTPUT : '1
-  PASSED
 
-TEST   : 'An Echo Test 2' (line 7)
-  CMD    : 'echo 1 2'
-  EXPECT : 1
-  EXPECT : 2
-  OUTPUT : '1 2
-  PASSED
+*********************************************************************
+Test 1 Example
+*********************************************************************
+*********************************************************************
+COMMENT: 'A simple test of echo commands. Above is a tr_h1 command and this is a tr_comment.
 
-TEST   : 'Test Error' (line 8)
-  CMD    : 'bash -c "exit 1"'
-  EXPECT :
-  OUTPUT : '
-  PASSED
-  
-TEST   : 'Query Test' (line 9)
+OUTPUT : VERYVERBOSE
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'An Echo Test' (./1.sh:line 11)
   CMD    : 'echo 1'
-  EXPECT : [ "${result}" != "0" ]
-  OUTPUT : '1
-  PASSED
+  RETVAL : expected(0} returned(0)
+  EXPECT : (0) 1
+  STDOUT2: '1
+  ✓ PASSED
+
+OUTPUT : VERBOSE
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'An Echo Test 2' (./1.sh:line 13)
+  ✓ PASSED
+
+SKIP T : ⚠ 'Skip this Test2' (./1.sh:line 14)
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'An Echo Test 2' (./1.sh:line 15)
+  ✓ PASSED
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'Test Error' (./1.sh:line 16)
+  ✓ PASSED
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'Query Test' (./1.sh:line 17)
+  ✓ PASSED
+COMMENT: 'Change directory, make a file and pop out
+
+DIR    : 'cd t'
+PROTECT: '1.txt' : /Users/cwingrav/code/wtrunner/tests/t/1.txt : diff:postcat
+
+POPDIR : 'to /Users/cwingrav/code/wtrunner/tests'
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'contents of file is 1' (./1.sh:line 26)
+  ✓ PASSED
+
+RUN    : 'set file to 2' (./1.sh:line 27)
+  CMD    : 'echo '2' > t/1.txt'
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'contents of file is 2' (./1.sh:line 28)
+  ✓ PASSED
+COMMENT: 'Replaces the protected file manually (normally runs on exit) and does a cat and diff (set with tr_protectfile
+             'command)
+RESTORE: '1.txt' : /Users/cwingrav/code/wtrunner/tests/t/1.txt : diff:postcat
+  ...diffing file: 1.txt
+1c1
+< 1
+---
+> 2
+  ...postcat file: 1.txt
+2
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+TEST   : 'contents of file back to 1' (./1.sh:line 33)
+  ✓ PASSED
+
+RESULTS
+--------------------------------------------------------------------------------------------------------------------------------------------
+  × 0 Failed   (0 checks)
+  ✓ 8 Passed   (9 checks)
+  ⚠ 1 Skipped
+  ⚠ 0 Todo
+    9 Total    (9 checks)
 ```
 
 

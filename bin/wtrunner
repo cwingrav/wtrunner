@@ -304,30 +304,30 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   function _tr_onfinish()
   {
     # Protected Files
-    local max=$((${#_tr_protectedfiles[@]}-1))
-    for i in `seq 0 $max`; do
-      if [ $max -le 0 ]; then break; fi
-      local f=${_tr_protectedfiles[$i]}
-      local ops=${_tr_protectedfileops[$i]}
-      local basefile=`basename "${f}"`
+    local max=$((${#_tr_protectedfiles[@]}))
+    if [ $max -gt 0 ]; then
+      for i in `seq 0 $((${max}-1))`; do
+        local f=${_tr_protectedfiles[$i]}
+        local ops=${_tr_protectedfileops[$i]}
+        local basefile=`basename "${f}"`
 
-      echo "RESTORE: '${basefile}' : ${f} : ${ops}"
-      cp "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
-      cp "${_tr_protecteddir}/${basefile}.${_tr_protectext}" "${f}"
+        echo "RESTORE: '${basefile}' : ${f} : ${ops}"
+        cp "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
+        cp "${_tr_protecteddir}/${basefile}.${_tr_protectext}" "${f}"
 
-      # handle ops
-      local opsarray=( $(echo "${ops}" | tr ':' ' ') )
-      for o in ${opsarray[@]}; do
-        if [ "${o}" == "diff" ]; then
-          echo "  ...diffing file: ${basefile}"
-          diff "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
-        elif [ "${o}" == "postcat" ]; then
-          echo "  ...postcat file: ${basefile}"
-          cat "${_tr_protecteddir}/${basefile}.lastrun"
-        fi
+        # handle ops
+        local opsarray=( $(echo "${ops}" | tr ':' ' ') )
+        for o in ${opsarray[@]}; do
+          if [ "${o}" == "diff" ]; then
+            echo "  ...diffing file: ${basefile}"
+            diff "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
+          elif [ "${o}" == "postcat" ]; then
+            echo "  ...postcat file: ${basefile}"
+            cat "${_tr_protecteddir}/${basefile}.lastrun"
+          fi
+        done
       done
-
-    done
+    fi
     _tr_protectedfiles=()
     _tr_protectedfileops=()
   }

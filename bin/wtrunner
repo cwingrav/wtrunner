@@ -39,6 +39,12 @@ if [ "${_tr_is_loaded}" != "1" ]; then
 
   _tr_runfile=
 
+  # Protected files values
+  _tr_protectedfiles=
+  _tr_protectedfileops=
+  _tr_protectext=
+  _tr_protecteddir=
+
 
   # Initialization
   # ---------------------------------------------------------------------
@@ -56,6 +62,10 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_doctest=
     _tr_sections=()
     _tr_runfile="$0"
+    _tr_protectedfiles=()           # files
+    _tr_protectedfileops=()         # options for the file
+    _tr_protectext="`date +%s`.$$"      # date and process number
+    _tr_protecteddir="`realpath ./wtrunnerprotectedfiles`"
   }
 
   # Configuration
@@ -67,6 +77,10 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   function tr_onfailcontinue()
   {
     _tr_exit_on_fail=0
+  }
+  function tr_istesting()
+  {
+    return $_tr_testson
   }
   function tr_tests_on()
   {
@@ -210,7 +224,8 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     echo "RUN FILE '${pp}' ('${p}')"
     _tr_runfileold="$_tr_runfile"
     _tr_runfile="${p}"
-    . "${p}"
+    # . "${p}"
+    ${p}
     _tr_runfile="$_tr_runfileold"
     # TODO: should check dirs stack as it could get screwed up here
   }
@@ -241,6 +256,86 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     printf "\nPOPDIR : 'to `pwd`'\n"
   }
 
+
+  # --------------------------------------------------------------------- 
+  # Protected Files
+  # --------------------------------------------------------------------- 
+  # By calling 'tr_protectfile', you make sure a file is moved out of 
+  # the way during testing, and the original replaced after the test.
+  # This is useful for files you don't want to loose, that your tests
+  # would replace or destroy normally.
+  # $1 - filename (local or full path is fine)
+  # $2 - options, with ':' between them ex "del:diff"
+  #    - 'del'  - then deletes the file after archiving it
+  #    - 'diff' - diff files on exit
+  # --------------------------------------------------------------------- 
+  function tr_protectfile()
+  {
+    local fullfile=
+    local basefile=
+    local ops=$2
+
+    # Make dir if needed
+    if [ ! -e ${_tr_protecteddir} ]; then
+      mkdir ${_tr_protecteddir}
+      if [ $? -ne 0 ]; then echo "ERROR: failed to create directory for protected files at '${_tr_protecteddir}'."; exit 1; fi
+    fi
+
+    if [ -e "${1}" ]; then
+      fullfile=`realpath "${1}"`
+      basefile=`basename "${1}"`
+      echo "PROTECT: '${basefile}' : ${fullfile} : ${ops}"
+      cp "${fullfile}" "${_tr_protecteddir}/${basefile}.${_tr_protectext}"
+      _tr_protectedfiles+=( "${fullfile}" )
+      _tr_protectedfileops+=( "${ops}" )
+
+      # handle ops
+      local opsarray=( $(echo "${ops}" | tr ':' ' ') )
+      for o in ${opsarray[@]}; do
+        if [ "${o}" == "del" ]; then
+          echo "  ...deleting after protecting file: ${basefile}"
+          rm "${1}"
+        fi
+      done
+    fi
+  }
+
+  # Called on exit (sucess or error). No need to call yourself.
+  function _tr_onfinish()
+  {
+    # Protected Files
+    local max=$((${#_tr_protectedfiles[@]}-1))
+    for i in `seq 0 $max`; do
+      if [ $max -le 0 ]; then break; fi
+      local f=${_tr_protectedfiles[$i]}
+      local ops=${_tr_protectedfileops[$i]}
+      local basefile=`basename "${f}"`
+
+      echo "RESTORE: '${basefile}' : ${f} : ${ops}"
+      cp "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
+      cp "${_tr_protecteddir}/${basefile}.${_tr_protectext}" "${f}"
+
+      # handle ops
+      local opsarray=( $(echo "${ops}" | tr ':' ' ') )
+      for o in ${opsarray[@]}; do
+        if [ "${o}" == "diff" ]; then
+          echo "  ...diffing file: ${basefile}"
+          diff "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
+        elif [ "${o}" == "postcat" ]; then
+          echo "  ...postcat file: ${basefile}"
+          cat "${_tr_protecteddir}/${basefile}.lastrun"
+        fi
+      done
+
+    done
+    _tr_protectedfiles=()
+    _tr_protectedfileops=()
+  }
+  trap _tr_onfinish EXIT
+
+
+  # Test Running
+  # ---------------------------------------------------------------------
 
   # 1 - name
   # 2 - test 
@@ -281,7 +376,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
 
     # echo "--EVAL $2"
     if [ ${_tr_output} -ge 2 ]; then
-#        printf "  CMD    : '$2'\n"
+        # printf "  CMD    : '$2'\n"
         cat <<EOF | fold -w ${_tr_fold2} -s | gsed 's/^/  /'
 CMD    : '$2'
 EOF
@@ -307,6 +402,7 @@ EOF
     RSTDerr=$(cat <&$fderr)
     wait $RP
     Re=$?
+    RRRe=${Re}
     #echo "RSTDout: ${RSTDout}"
     #echo "RSTDerr: ${RSTDerr}"
     #echo "Re     : ${Re}"
@@ -384,24 +480,32 @@ EOF
 
 
   if [ $retval -eq 1 ]; then
-      printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-      printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
-      printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
-      #printf "  OUTPUT1: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
-#      printf "    %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
-      printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
-      printf "  \U00D7 FAILED\n"
-      let "_tr_results[0]++"
-    else
-      if [ ${_tr_output} -ge 2 ]; then
-        printf "  EXPECT : %s\n" "${EXPECTED[@]}"
-        printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
-        #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
-        if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
-      fi
-      printf "  \U2713 PASSED\n"
-      let "_tr_results[1]++"
+    local head=
+    local headl=
+    printf "  RETVAL : expected($3} returned(${RRRe})\n"
+    printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
+    head="  STDOUT : "
+    headl=${#head}
+    printf -- "${RM[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
+    head="  STDERR1: "
+    headl=${#head}
+    printf -- "${RSTDerr[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
+    # printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
+    # printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
+    printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
+    printf "  \U00D7 FAILED\n"
+    let "_tr_results[0]++"
+  else
+    if [ ${_tr_output} -ge 2 ]; then
+      printf "  RETVAL : expected($3} returned(${RRRe})\n"
+      printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
+      printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
+      #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+      if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
     fi
+    printf "  \U2713 PASSED\n"
+    let "_tr_results[1]++"
+  fi
 
     if [ ${retval} -ne 0 ] && [ ${_tr_exit_on_fail} == 1 ]; then tr_results; exit 1; fi
     return $retval

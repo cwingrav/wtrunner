@@ -73,6 +73,7 @@ TEST   : 'Query Test' (line 9)
 - **tr_runfile** - sources another test file. Uses the relative directory to this file.
 - **tr_dir X** - change the current directory for your test cases. Can be full or relative path.
 - **tr_popdir** - undoes the last directory change from *tr_dir*
+- **tr_protectfile** - moves the file out of the way and restores it after the test. Options to delete before run or diff after.
 
 ### Logging / Documentation
 

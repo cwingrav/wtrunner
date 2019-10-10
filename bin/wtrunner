@@ -350,10 +350,11 @@ if [ "${_tr_is_loaded}" != "1" ]; then
         local ops=${_tr_protecteddirops[$i]}
         local basedir=`basename "${f}"`
 
-        echo "RESTORE: '${basefile}' : ${f} : ${ops}"
+        echo "RESTORE DIR : '${basedir}' : ${f} : ${ops}"
         if [ -e "${f}" ]; then
+          if [ -e "${_tr_protecteddir}/${basedir}.lastrun" ]; then rm -Rf "${_tr_protecteddir}/${basedir}.lastrun"; fi
           mv "${f}" "${_tr_protecteddir}/${basedir}.lastrun"
-          echo "  ...saving last run as: '$(basepath ${_tr_protecteddir}))/${basedir}.lastrun'"
+          echo "  ...saving last run as: '$(basename ${_tr_protecteddir})/${basedir}.lastrun'"
         fi
         rsync -aAXq "${_tr_protecteddir}/${basedir}.${_tr_protectext}/" "${f}" 
 
@@ -374,7 +375,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
         local ops=${_tr_protectedfileops[$i]}
         local basefile=`basename "${f}"`
 
-        echo "RESTORE: '${basefile}' : ${f} : ${ops}"
+        echo "RESTORE FILE: '${basefile}' : ${f} : ${ops}"
         cp "${f}" "${_tr_protecteddir}/${basefile}.lastrun"
         cp "${_tr_protecteddir}/${basefile}.${_tr_protectext}" "${f}"
 

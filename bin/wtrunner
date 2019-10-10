@@ -42,6 +42,8 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   # Protected files values
   _tr_protectedfiles=
   _tr_protectedfileops=
+  _tr_protecteddirs=
+  _tr_protecteddirops=
   _tr_protectext=
   _tr_protecteddir=
 
@@ -64,6 +66,8 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_runfile="$0"
     _tr_protectedfiles=()           # files
     _tr_protectedfileops=()         # options for the file
+    _tr_protecteddirs=()            # dirs
+    _tr_protecteddirops=()          # options for the dir
     _tr_protectext="`date +%s`.$$"      # date and process number
     _tr_protecteddir="`realpath ./wtrunnerprotectedfiles`"
   }
@@ -257,6 +261,39 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   }
 
 
+  function tr_protectdir()
+  {
+    local fulldir=
+    local basedir=
+    local ops=$2
+
+    # Make dir if needed
+    if [ ! -e ${_tr_protecteddir} ]; then
+      mkdir ${_tr_protecteddir}
+      if [ $? -ne 0 ]; then echo "ERROR: failed to create directory for protected dirs at '${_tr_protecteddir}'."; exit 1; fi
+    fi
+
+    if [ -e "${1}" ]; then
+      fulldir=`realpath "${1}"`
+      basedir=`basename "${1}"`
+      echo "PROTECT: '${basedir}' : ${fulldir} : ${ops}"
+      rsync -aAXq "${fulldir}/" "${_tr_protecteddir}/${basedir}.${_tr_protectext}"
+      # mv "${fulldir}" "${_tr_protecteddir}/${basedir}.${_tr_protectext}"
+      _tr_protecteddirs+=( "${fulldir}" )
+      _tr_protecteddirops+=( "${ops}" )
+
+      # handle ops
+      local opsarray=( $(echo "${ops}" | tr ':' ' ') )
+      for o in ${opsarray[@]}; do
+        if [ "${o}" == "del" ]; then
+          echo "  ...deleting after protecting dir: ${basedir}"
+          rm -Rf "${1}"
+        fi
+      done
+    fi
+
+  }
+
   # --------------------------------------------------------------------- 
   # Protected Files
   # --------------------------------------------------------------------- 
@@ -303,8 +340,34 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   # Called on exit (sucess or error). No need to call yourself.
   function _tr_onfinish()
   {
+    local max=
+
+    # Protected Dirs
+    max=$((${#_tr_protecteddirs[@]}))
+    if [ $max -gt 0 ]; then
+      for i in `seq 0 $((${max}-1))`; do
+        local f=${_tr_protecteddirs[$i]}
+        local ops=${_tr_protecteddirops[$i]}
+        local basedir=`basename "${f}"`
+
+        echo "RESTORE: '${basefile}' : ${f} : ${ops}"
+        if [ -e "${f}" ]; then
+          mv "${f}" "${_tr_protecteddir}/${basedir}.lastrun"
+          echo "  ...saving last run as: '$(basepath ${_tr_protecteddir}))/${basedir}.lastrun'"
+        fi
+        rsync -aAXq "${_tr_protecteddir}/${basedir}.${_tr_protectext}/" "${f}" 
+
+        # handle ops
+        # local opsarray=( $(echo "${ops}" | tr ':' ' ') )
+        # for o in ${opsarray[@]}; do
+        # done
+      done
+    fi
+    _tr_protecteddirs=()
+    _tr_protecteddirops=()
+
     # Protected Files
-    local max=$((${#_tr_protectedfiles[@]}))
+    max=$((${#_tr_protectedfiles[@]}))
     if [ $max -gt 0 ]; then
       for i in `seq 0 $((${max}-1))`; do
         local f=${_tr_protectedfiles[$i]}
@@ -388,30 +451,38 @@ EOF
     # --------------------------------------------------------------------- 
     # EVALUATE THE COMMAND
     # --------------------------------------------------------------------- 
-    rm -f STDout.${_tr_tc} STDerr.${_tr_tc}
-    mkfifo STDout.${_tr_tc} STDerr.${_tr_tc}
-    $(COLUMNS=${_tr_fold4} eval ${2} >STDout.${_tr_tc} 2>STDerr.${_tr_tc}) &
-    RP=$!
-    #echo "RP ${RP}"
-    exec {fdout}<STDout.${_tr_tc} {fderr}<STDerr.${_tr_tc}
-    #RSTDout=$(cat <&$fdout)
-    rm STDout.${_tr_tc} STDerr.${_tr_tc}
-#    R_=($(cat <&$fdout))
-    mapfile -t <&$fdout
-    RM=("${MAPFILE[@]}")
-    RSTDerr=$(cat <&$fderr)
-    wait $RP
-    Re=$?
-    RRRe=${Re}
+#    rm -f STDout.${_tr_tc} STDerr.${_tr_tc}
+#    mkfifo STDout.${_tr_tc} STDerr.${_tr_tc}
+#    $(COLUMNS=${_tr_fold4} eval ${2} >STDout.${_tr_tc} 2>STDerr.${_tr_tc}) &
+#    RP=$!
+#    exec {fdout}<STDout.${_tr_tc} {fderr}<STDerr.${_tr_tc}
+#    rm STDout.${_tr_tc} STDerr.${_tr_tc}
+#    mapfile -t <&$fdout
+#    RM=("${MAPFILE[@]}")
+#    RSTDerr=$(cat <&$fderr)
+#    wait $RP
+#    Re=$?
+#    RRRe=${Re}
     #echo "RSTDout: ${RSTDout}"
     #echo "RSTDerr: ${RSTDerr}"
     #echo "Re     : ${Re}"
-    exec {fdout}<&- {fderr}<&-
+    # exec {fdout}<&- {fderr}<&-
 
     #echo "RM: ${#RM[@]} '${RM[@]}'"
 
     # make sure it at least has some output of ''
-    if [ ${#RM[@]} -eq 0 ]; then RM=( '' ); fi
+    #if [ ${#RM[@]} -eq 0 ]; then RM=( '' ); fi
+
+
+
+    # from https://stackoverflow.com/a/18086548/2664702
+    unset t_std t_err RM
+    eval "$( (COLUMNS=${_tr_fold4} eval ${2})  \
+        2> >(readarray -t t_err; typeset -p t_err) \
+         > >(readarray -t RM; typeset -p RM) )" ; Re=$?
+    #echo "t_std) ${t_std[@]}"
+    #echo "RM) ${RM[@]}"
+    RRRe=${Re}
 
     local retval=0
 

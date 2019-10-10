@@ -476,12 +476,14 @@ EOF
 
 
     # from https://stackoverflow.com/a/18086548/2664702
-    unset t_std t_err RM
-    eval "$( (COLUMNS=${_tr_fold4} eval ${2})  \
-        2> >(readarray -t t_err; typeset -p t_err) \
-         > >(readarray -t RM; typeset -p RM) )" ; Re=$?
+    unset t_std t_err RM RSTDerr
+    eval "$( (COLUMNS=${_tr_fold4} eval ${2} )  \
+        2> >(readarray -t RSTDerr; typeset -p RSTDerr) \
+         > >(readarray -t RM; typeset -p RM) ) ; Re=$?"
     #echo "t_std) ${t_std[@]}"
-    #echo "RM) ${RM[@]}"
+    #echo "RSTDerr) ${RSTDerr[@]}"
+    #echo "RM@) ${#RM[@]} : ${RM[@]}"
+    #echo "RM*) ${#RM[*]} : ${RM[*]}"
     RRRe=${Re}
 
     local retval=0
@@ -492,7 +494,7 @@ EOF
     fi
 
     # test retval
-    if [ ${Re} != ${3} ]; then
+    if [ ${Re} -ne ${3} ]; then
       E+=( "F CHECK: return value '${Re}' is not '${3}'" )
       #echo "    F CHECK: return value '${Re}' is not '${3}'"
       #    let "_tr_results[3]++" # not counting return values
@@ -555,24 +557,28 @@ EOF
     local headl=
     printf "  RETVAL : expected($3} returned(${RRRe})\n"
     printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
-    head="  STDOUT : "
+    head="  STDOUT1: "
     headl=${#head}
+    printf -- "${RM[@]}\n"
+    head="  STDOUT2: "
     printf -- "${RM[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
-    head="  STDERR1: "
+    head="  STDERR : "
     headl=${#head}
-    printf -- "${RSTDerr[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
+    printf -- "${RSTDerr[*]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
     # printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
     # printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
-    printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
+    #printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
     printf "  \U00D7 FAILED\n"
     let "_tr_results[0]++"
   else
     if [ ${_tr_output} -ge 2 ]; then
+      local head=
+      local headl=
       printf "  RETVAL : expected($3} returned(${RRRe})\n"
       printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
-      printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
+      printf "  STDOUT : '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
       #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
-      if [ "${RSTDerr[@]}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
+      if [ "${RSTDerr}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
     fi
     printf "  \U2713 PASSED\n"
     let "_tr_results[1]++"

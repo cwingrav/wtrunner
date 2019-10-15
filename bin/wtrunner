@@ -46,6 +46,8 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   _tr_protecteddirops=
   _tr_protectext=
   _tr_protecteddir=
+  _tr_protectcmds_pre=
+  _tr_protectcmds_post=
 
 
   # Initialization
@@ -70,6 +72,8 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_protecteddirops=()          # options for the dir
     _tr_protectext="`date +%s`.$$"      # date and process number
     _tr_protecteddir="`realpath ./wtrunnerprotectedfiles`"
+    _tr_protectcmds_pre=()
+    _tr_protectcmds_post=()
   }
 
   # Configuration
@@ -229,7 +233,15 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     _tr_runfileold="$_tr_runfile"
     _tr_runfile="${p}"
     # . "${p}"
-    ${p}
+    local Re=
+    local r=
+
+    ${p} ; Re=$?
+    echo "Re: ${Re}"
+    if [ $Re -ne 0 ]; then
+      echo "FAILED: ${p}"
+      exit 1
+    fi
     _tr_runfile="$_tr_runfileold"
     # TODO: should check dirs stack as it could get screwed up here
   }
@@ -337,10 +349,35 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     fi
   }
 
+  # --------------------------------------------------------------------- 
+  # Calls function on exit to return some stateful values to original 
+  # state, just like tr_protect[file|dir] restores files/dirs.
+  # --------------------------------------------------------------------- 
+  function tr_protectcmds()
+  {
+    local line=
+    while read line; do
+      _tr_protectcmds_pre+=( "${line}" )
+    done < "${1:-/dev/stdin}"
+  }
+  function tr_protectcmds_post()
+  {
+    local line=
+    while read line; do
+      _tr_protectcmds_post+=( "${line}" )
+    done < "${1:-/dev/stdin}"
+  }
+
   # Called on exit (sucess or error). No need to call yourself.
   function _tr_onfinish()
   {
     local max=
+
+    # pre protect cmds (before restoring dirs and files)
+    #echo "${_tr_protectcmds_pre}"
+    #echo "${_tr_protectcmds_post}"
+    #echo "${#_tr_protectcmds_pre[@]}: ${#_tr_protectcmds_pre[*]}"
+    for l in "${_tr_protectcmds_pre[@]}" ; do eval $l; done
 
     # Protected Dirs
     max=$((${#_tr_protecteddirs[@]}))
@@ -392,8 +429,14 @@ if [ "${_tr_is_loaded}" != "1" ]; then
         done
       done
     fi
+
+    # post protect cmds (after restoring dirs and files)
+    for l in "${_tr_protectcmds_post[@]}" ; do eval $l; done
+
     _tr_protectedfiles=()
     _tr_protectedfileops=()
+    _tr_protectcmds_pre=
+    _tr_protectcmds_post=
   }
   trap _tr_onfinish EXIT
 
@@ -557,15 +600,17 @@ EOF
     local head=
     local headl=
     printf "  RETVAL : expected($3} returned(${RRRe})\n"
-    printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
-    head="  STDOUT1: "
+    printf "  EXPECT : ($3) ${#EXPECTED[@]}:'%s'\n" "${EXPECTED[@]}"
+    printf "  EXPECT1: '%s'\n" "${EXPECTED[@]}" | fold -w ${_tr_fold4} -s 
+    printf "  STDOUT1: ${#RM[@]}:'%s'\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
+#    head="  STDOUT1: "
+#    printf -- "${RM[@]}\n"
+#    head="  STDOUT2: "
+#    headl=${#head}
+#    printf -- "${RM[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
+    head="  STDERR1: "
     headl=${#head}
-    printf -- "${RM[@]}\n"
-    head="  STDOUT2: "
-    printf -- "${RM[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
-    head="  STDERR : "
-    headl=${#head}
-    printf -- "${RSTDerr[*]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
+    printf -- "${RSTDerr[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
     # printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
     # printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
     #printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
@@ -577,9 +622,9 @@ EOF
       local headl=
       printf "  RETVAL : expected($3} returned(${RRRe})\n"
       printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
-      printf "  STDOUT : '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
+      printf "  STDOUT3: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
       #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
-      if [ "${RSTDerr}" != "" ]; then printf "  STDERR : '%s'\n" "${RSTDerr[@]}"; fi
+      if [ "${RSTDerr}" != "" ]; then printf "  STDERR2: '%s'\n" "${RSTDerr[@]}"; fi
     fi
     printf "  \U2713 PASSED\n"
     let "_tr_results[1]++"
@@ -603,6 +648,13 @@ EOF
   function tr_doctest
   {
     _tr_doctest="$*"
+  }
+
+  function tr_exit()
+  {
+    tr_results
+    tr_h3 "tr_exit() called: exiting early (code 2)"
+    exit 2
   }
 
   tr_results()

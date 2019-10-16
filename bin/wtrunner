@@ -2,8 +2,10 @@
 
 # Wov Test Runner
 
-
 if [ "${_tr_is_loaded}" != "1" ]; then
+
+  GSED=sed
+  [[ "$(uname -s)" == "Darwin" ]] && GSED=gsed
 
   _tr_fold=`tput cols`
   let _tr_fold2=$_tr_fold-11
@@ -176,7 +178,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
   }
   function tr_comment()
   {
-    echo "COMMENT: '$1" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/             \x27/'
+    echo "COMMENT: '$1" | fold -w ${_tr_fold4} -s | ${GSED} -e '2,$s/^/             \x27/'
   }
 
   function tr_h1()
@@ -463,7 +465,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     >&2 printf "\nRUN    : '${1}' (${_tr_runfile}:line ${BASH_LINENO})\n"
     printf   "  CMD    : '${2}'\n"
     # TODO: capture stderr/out
-    eval "${2} 2> /dev/null" | gsed 's/^/  \x27/'
+    eval "${2} 2> /dev/null" | ${GSED} 's/^/  \x27/'
   }
   function tr_run_skip()
   {
@@ -484,7 +486,7 @@ if [ "${_tr_is_loaded}" != "1" ]; then
     # echo "--EVAL $2"
     if [ ${_tr_output} -ge 2 ]; then
         # printf "  CMD    : '$2'\n"
-        cat <<EOF | fold -w ${_tr_fold2} -s | gsed 's/^/  /'
+        cat <<EOF | fold -w ${_tr_fold2} -s | ${GSED} 's/^/  /'
 CMD    : '$2'
 EOF
     fi
@@ -611,7 +613,7 @@ EOF
     head="  STDERR1: "
     headl=${#head}
     printf -- "${RSTDerr[@]}\n" | fold -s -w $((_tr_fold-headl)) | sed -e "1 s/^/$head/" -e "2,\$s/^/$(printf -- ' %.0s' `seq 2 $headl`}) /"
-    # printf "  STDOUT : '%s\n" "${RM[@]}" | gsed -e '2,$s/^/           \x27/'
+    # printf "  STDOUT : '%s\n" "${RM[@]}" | ${GSED} -e '2,$s/^/           \x27/'
     # printf "  STDERR1: '%s\n" "${RSTDerr[@]}"
     #printf "  %s\n" "${E[@]}" | fold -w ${_tr_fold4} -s
     printf "  \U00D7 FAILED\n"
@@ -623,7 +625,7 @@ EOF
       printf "  RETVAL : expected($3} returned(${RRRe})\n"
       printf "  EXPECT : ($3) %s\n" "${EXPECTED[@]}"
       printf "  STDOUT3: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s 
-      #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | gsed -e '2,$s/^/           \x27/'
+      #printf "  STDOUT2: '%s\n" "${RM[@]}" | fold -w ${_tr_fold4} -s | ${GSED} -e '2,$s/^/           \x27/'
       if [ "${RSTDerr}" != "" ]; then printf "  STDERR2: '%s'\n" "${RSTDerr[@]}"; fi
     fi
     printf "  \U2713 PASSED\n"
